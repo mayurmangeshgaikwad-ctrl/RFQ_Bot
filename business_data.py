@@ -3,7 +3,7 @@ import csv
 
 def find_inventory(product):
 
-    with open("data/inventory.csv", "r") as file:
+    with open("inventory.csv", "r") as file:
 
         reader = csv.DictReader(file)
 
@@ -21,7 +21,7 @@ def find_inventory(product):
 
 def find_price(product):
 
-    with open("data/pricing.csv", "r") as file:
+    with open("pricing.csv", "r") as file:
 
         reader = csv.DictReader(file)
 
@@ -40,7 +40,7 @@ def find_price(product):
 
 def find_customer_history(customer, product):
 
-    with open("data/customer_history.csv", "r") as file:
+    with open("customer_history.csv", "r") as file:
 
         reader = csv.DictReader(file)
 
