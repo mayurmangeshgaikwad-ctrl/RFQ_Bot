@@ -1,7 +1,3 @@
-# ==================================================
-# CREATE ONE QUOTE LINE
-# ==================================================
-
 def create_quote_line(
     item,
     inventory,
@@ -32,10 +28,6 @@ def create_quote_line(
             "price": None
         }
 
-
-# ==================================================
-# CREATE CLIENT QUOTE
-# ==================================================
 
 def create_client_quote(
     customer,
