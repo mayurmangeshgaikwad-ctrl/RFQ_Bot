@@ -14,7 +14,7 @@ from database import (
 from business_data import (
     find_inventory,
     find_price,
-    find_customer_history,
+    find_customer_history
 )
 
 from quote_generator import (
@@ -22,18 +22,15 @@ from quote_generator import (
     create_client_quote
 )
 
-create_database()
 
+create_database()
 
 st.set_page_config(
     page_title="RFQ Auto-Response Bot",
-    page_icon="",
     layout="wide"
 )
 
-
-
-st.title("📧 RFQ Auto-Response Bot")
+st.title("RFQ Auto-Response Bot")
 
 st.write(
     "RFQ detection, information extraction, "
@@ -42,15 +39,13 @@ st.write(
 
 st.divider()
 
-
-
 section = st.selectbox(
     "Select Section",
     [
-        " Inbox / RFQ Detection",
-        " RFQ Records",
-        " Inventory",
-        " Quote Review"
+        "Inbox / RFQ Detection",
+        "RFQ Records",
+        "Inventory",
+        "Quote Review"
     ]
 )
 
@@ -60,7 +55,6 @@ def check_inventory(product, requested_quantity):
     item = get_inventory_product(product)
 
     if item is None:
-
         return {
             "status": "Not Available",
             "available": 0,
@@ -76,16 +70,11 @@ def check_inventory(product, requested_quantity):
     available_quantity = float(item[3])
     price = float(item[5])
     unit = item[4]
-
-    requested_quantity = float(
-        requested_quantity
-    )
+    requested_quantity = float(requested_quantity)
 
     if requested_quantity <= available_quantity:
 
-        total_amount = (
-            requested_quantity * price
-        )
+        total_amount = requested_quantity * price
 
         return {
             "status": "Available",
@@ -111,7 +100,6 @@ def check_inventory(product, requested_quantity):
 
 
 emails = [
-
     {
         "id": 1,
         "sender": "purchasing@abc-chemicals.com",
@@ -129,7 +117,6 @@ Required delivery: 15 September
 Regards,
 mayur Chemicals Purchasing Team"""
     },
-
     {
         "id": 2,
         "sender": "accounts@xyz-industries.com",
@@ -141,7 +128,6 @@ Could you please send us a copy of our previous invoice?
 
 Thank you."""
     },
-
     {
         "id": 3,
         "sender": "purchase@global-labs.com",
@@ -161,7 +147,6 @@ Please include your price and delivery time.
 Regards,
 GlobalEd Labs"""
     },
-
     {
         "id": 4,
         "sender": "procurement@mega-industries.com",
@@ -181,11 +166,9 @@ Quantity: 100 KG
 Please include price and delivery time.
 
 Regards,
-Iron Industries """
+Iron Industries"""
     }
-
 ]
-
 
 
 def detect_rfq(email):
@@ -197,7 +180,6 @@ def detect_rfq(email):
     ).lower()
 
     rfq_words = [
-
         "rfq",
         "quotation",
         "quote",
@@ -207,11 +189,9 @@ def detect_rfq(email):
         "commercial offer",
         "pricing",
         "please quote"
-
     ]
 
     for word in rfq_words:
-
         if word in text:
             return True
 
@@ -221,49 +201,29 @@ def detect_rfq(email):
 def extract_rfq_information(email):
 
     body = email["body"]
-
     line_items = []
-
     current_item = None
 
-    lines = body.split("\n")
-
-    for line in lines:
+    for line in body.split("\n"):
 
         line = line.strip()
-
 
         if line.lower().startswith("product:"):
 
             if current_item is not None:
-
-                line_items.append(
-                    current_item
-                )
+                line_items.append(current_item)
 
             current_item = {
-
                 "customer": email["customer"],
-
-                "product": (
-                    line.split(":", 1)[1].strip()
-                ),
-
+                "product": line.split(":", 1)[1].strip(),
                 "cas_number": "Unknown",
-
                 "quantity": "Unknown",
-
                 "delivery_date": "Unknown"
-
             }
 
-        
-        elif line.lower().startswith(
-            "cas number:"
-        ):
+        elif line.lower().startswith("cas number:"):
 
             if current_item is not None:
-
                 current_item["cas_number"] = (
                     line.split(":", 1)[1].strip()
                 )
@@ -271,41 +231,28 @@ def extract_rfq_information(email):
         elif line.lower().startswith("cas:"):
 
             if current_item is not None:
-
                 current_item["cas_number"] = (
                     line.split(":", 1)[1].strip()
                 )
 
-        elif line.lower().startswith(
-            "quantity:"
-        ):
+        elif line.lower().startswith("quantity:"):
 
             if current_item is not None:
-
                 current_item["quantity"] = (
                     line.split(":", 1)[1].strip()
                 )
 
-        elif line.lower().startswith(
-            "required delivery:"
-        ):
+        elif line.lower().startswith("required delivery:"):
 
             if current_item is not None:
-
                 current_item["delivery_date"] = (
                     line.split(":", 1)[1].strip()
                 )
 
-    # Add final item
-
     if current_item is not None:
-
-        line_items.append(
-            current_item
-        )
+        line_items.append(current_item)
 
     return line_items
-
 
 
 def find_saved_rfq(customer, product):
@@ -314,27 +261,19 @@ def find_saved_rfq(customer, product):
 
     for rfq in rfqs:
 
-        # rfq structure:
-        # id, customer, product, cas,
-        # quantity, delivery, status, total
-
         if (
             rfq[1] == customer
             and rfq[2].lower() == product.lower()
         ):
-
             return rfq
 
     return None
 
 
-if section == " Inbox / RFQ Detection":
+if section == "Inbox / RFQ Detection":
 
-    st.subheader(
-        "Incoming Emails"
-    )
+    st.subheader("Incoming Emails")
 
-    # Get current CRM records once
     existing_rfqs = get_rfqs()
 
     for email in emails:
@@ -353,8 +292,7 @@ if section == " Inbox / RFQ Detection":
             )
 
             status_match = (
-                rfq[6]
-                in ["Approved", "Rejected"]
+                rfq[6] in ["Approved", "Rejected"]
             )
 
             if (
@@ -362,22 +300,16 @@ if section == " Inbox / RFQ Detection":
                 and product_match
                 and status_match
             ):
-
                 already_processed = True
-
                 break
 
-
         if already_processed:
-
             continue
-
 
         is_rfq = detect_rfq(email)
 
         with st.expander(
-            f"{email['subject']} — "
-            f"{email['sender']}"
+            f"{email['subject']} — {email['sender']}"
         ):
 
             st.write(
@@ -392,35 +324,24 @@ if section == " Inbox / RFQ Detection":
 
             st.write("**Email:**")
 
-            st.text(
-                email["body"]
-            )
+            st.text(email["body"])
 
             st.divider()
 
             if not is_rfq:
 
-                st.warning(
-                    "NOT AN RFQ"
-                )
+                st.warning("NOT AN RFQ")
 
                 continue
 
-            st.success(
-                "RFQ DETECTED"
-            )
+            st.success("RFQ DETECTED")
 
-            line_items = (
-                extract_rfq_information(email)
-            )
+            line_items = extract_rfq_information(email)
 
             for item in line_items:
 
                 product = item["product"]
-
-                quantity_text = (
-                    item["quantity"]
-                )
+                quantity_text = item["quantity"]
 
                 try:
 
@@ -428,12 +349,9 @@ if section == " Inbox / RFQ Detection":
                         quantity_text.split()[0]
                     )
 
-                except (
-                    ValueError,
-                    IndexError
-                ):
+                except (ValueError, IndexError):
 
-                     st.error(
+                    st.error(
                         f"Could not read quantity "
                         f"for {product}: "
                         f"{quantity_text}"
@@ -441,11 +359,9 @@ if section == " Inbox / RFQ Detection":
 
                     continue
 
-                inventory_result = (
-                    check_inventory(
-                        product,
-                        requested_quantity
-                    )
+                inventory_result = check_inventory(
+                    product,
+                    requested_quantity
                 )
 
                 st.write(
@@ -464,14 +380,9 @@ if section == " Inbox / RFQ Detection":
                     f"{inventory_result['unit']}"
                 )
 
-                if (
-                    inventory_result["status"]
-                    == "Available"
-                ):
+                if inventory_result["status"] == "Available":
 
-                    st.success(
-                        "AVAILABLE"
-                    )
+                    st.success("AVAILABLE")
 
                     st.write(
                         f"Price: "
@@ -484,14 +395,9 @@ if section == " Inbox / RFQ Detection":
                         f"₹{inventory_result['total_amount']:,.2f}"
                     )
 
-                elif (
-                    inventory_result["status"]
-                    == "Insufficient"
-                ):
+                elif inventory_result["status"] == "Insufficient":
 
-                    st.warning(
-                        " INSUFFICIENT INVENTORY"
-                    )
+                    st.warning("INSUFFICIENT INVENTORY")
 
                     st.write(
                         inventory_result["message"]
@@ -499,17 +405,13 @@ if section == " Inbox / RFQ Detection":
 
                 else:
 
-                    st.error(
-                        " NOT AVAILABLE"
-                    )
+                    st.error("NOT AVAILABLE")
 
                     st.write(
                         inventory_result["message"]
                     )
 
-            st.subheader(
-                " Extracted RFQ Line Items"
-            )
+            st.subheader("Extracted RFQ Line Items")
 
             for number, item in enumerate(
                 line_items,
@@ -520,9 +422,7 @@ if section == " Inbox / RFQ Detection":
                     f"### Line Item {number}"
                 )
 
-                col1, col2 = (
-                    st.columns(2)
-                )
+                col1, col2 = st.columns(2)
 
                 with col1:
 
@@ -575,15 +475,11 @@ if section == " Inbox / RFQ Detection":
                     f"### {item['product']}"
                 )
 
-                col1, col2, col3 = (
-                    st.columns(3)
-                )
+                col1, col2, col3 = st.columns(3)
 
                 with col1:
 
-                    st.write(
-                        "**Inventory**"
-                    )
+                    st.write("Inventory")
 
                     if inventory:
 
@@ -600,9 +496,7 @@ if section == " Inbox / RFQ Detection":
 
                 with col2:
 
-                    st.write(
-                        " **Price**"
-                    )
+                    st.write("Price")
 
                     if price:
 
@@ -620,9 +514,7 @@ if section == " Inbox / RFQ Detection":
 
                 with col3:
 
-                    st.write(
-                        "**Customer History**"
-                    )
+                    st.write("Customer History")
 
                     if history:
 
@@ -646,14 +538,13 @@ if section == " Inbox / RFQ Detection":
                 if inventory is None:
 
                     st.warning(
-                        "Product not available "
-                        "in-house"
+                        "Product not available in-house"
                     )
 
                 else:
 
                     st.success(
-                        " In-house product"
+                        "In-house product"
                     )
 
                 quote_line = create_quote_line(
@@ -662,28 +553,23 @@ if section == " Inbox / RFQ Detection":
                     price
                 )
 
-                quote_lines.append(
-                    quote_line
-                )
+                quote_lines.append(quote_line)
 
                 st.divider()
 
-
             if st.button(
-                " Save RFQ to CRM",
+                "Save RFQ to CRM",
                 key=f"save_{email['id']}"
             ):
 
                 for item in line_items:
-
                     save_rfq(item)
+
+                existing_rfqs = get_rfqs()
 
                 st.success(
                     "RFQ line items saved to CRM!"
                 )
-
-                # Refresh CRM records
-                existing_rfqs = get_rfqs()
 
             if st.button(
                 "Generate Draft Quote",
@@ -697,30 +583,18 @@ if section == " Inbox / RFQ Detection":
 
                 if line_items:
 
-                    first_item = (
-                        line_items[0]
-                    )
+                    first_item = line_items[0]
 
-                    product = (
-                        first_item["product"]
-                    )
-
-                    customer = (
-                        email["customer"]
-                    )
+                    product = first_item["product"]
+                    customer = email["customer"]
 
                     try:
 
                         requested_quantity = float(
-                            first_item[
-                                "quantity"
-                            ].split()[0]
+                            first_item["quantity"].split()[0]
                         )
 
-                    except (
-                        ValueError,
-                        IndexError
-                    ):
+                    except (ValueError, IndexError):
 
                         requested_quantity = None
 
@@ -728,13 +602,10 @@ if section == " Inbox / RFQ Detection":
 
                     if requested_quantity is not None:
 
-                        inventory_result = (
-                            check_inventory(
-                                product,
-                                requested_quantity
-                            )
+                        inventory_result = check_inventory(
+                            product,
+                            requested_quantity
                         )
-
 
                     saved_rfq = find_saved_rfq(
                         customer,
@@ -776,15 +647,11 @@ if section == " Inbox / RFQ Detection":
                     st.session_state[
                         "quote_total"
                     ] = (
-                        inventory_result[
-                            "total_amount"
-                        ]
+                        inventory_result["total_amount"]
                         if (
                             inventory_result
-                            and
-                            inventory_result[
-                                "status"
-                            ] == "Available"
+                            and inventory_result["status"]
+                            == "Available"
                         )
                         else 0
                     )
@@ -792,7 +659,6 @@ if section == " Inbox / RFQ Detection":
                     st.session_state[
                         "quote_status"
                     ] = "Pending Review"
-
 
                 st.session_state[
                     "draft_quote"
@@ -807,11 +673,9 @@ if section == " Inbox / RFQ Detection":
                 )
 
 
-elif section == " RFQ Records":
+elif section == "RFQ Records":
 
-    st.subheader(
-        "RFQ Records"
-    )
+    st.subheader("RFQ Records")
 
     rfqs = get_rfqs()
 
@@ -842,9 +706,7 @@ elif section == " RFQ Records":
                 f"{product}"
             ):
 
-                col1, col2 = (
-                    st.columns(2)
-                )
+                col1, col2 = st.columns(2)
 
                 with col1:
 
@@ -893,9 +755,7 @@ elif section == " RFQ Records":
 
 elif section == "Inventory":
 
-    st.subheader(
-        "Company Inventory"
-    )
+    st.subheader("Company Inventory")
 
     inventory = get_inventory()
 
@@ -921,9 +781,7 @@ elif section == "Inventory":
 
 elif section == "Quote Review":
 
-    st.subheader(
-        " Quote Review"
-    )
+    st.subheader("Quote Review")
 
     if "draft_quote" not in st.session_state:
 
@@ -938,9 +796,7 @@ elif section == "Quote Review":
 
     else:
 
-        st.write(
-            "### Customer"
-        )
+        st.write("### Customer")
 
         st.info(
             st.session_state[
@@ -948,13 +804,10 @@ elif section == "Quote Review":
             ]
         )
 
-        st.write(
-            "### Draft Response"
-        )
+        st.write("### Draft Response")
 
         st.text_area(
-            "Review and edit the draft "
-            "before approval:",
+            "Review and edit the draft before approval:",
             value=st.session_state[
                 "draft_quote"
             ],
@@ -968,79 +821,61 @@ elif section == "Quote Review":
             "HUMAN REVIEW REQUIRED"
         )
 
-        current_status = (
-            st.session_state.get(
-                "quote_status",
-                "Pending Review"
-            )
+        current_status = st.session_state.get(
+            "quote_status",
+            "Pending Review"
         )
 
         st.write(
-            f"Current status: "
-            f"**{current_status}**"
+            f"Current status: **{current_status}**"
         )
 
         st.divider()
 
-        col1, col2 = (
-            st.columns(2)
-        )
+        col1, col2 = st.columns(2)
 
         with col1:
 
             if st.button(
-                " Approve Quote",
+                "Approve Quote",
                 key="approve_quote_button"
             ):
 
-                rfq_id = (
-                    st.session_state.get(
-                        "quote_rfq_id"
-                    )
+                rfq_id = st.session_state.get(
+                    "quote_rfq_id"
                 )
 
-                customer = (
-                    st.session_state.get(
-                        "quote_customer"
-                    )
+                customer = st.session_state.get(
+                    "quote_customer"
                 )
 
-                product = (
-                    st.session_state.get(
-                        "quote_product"
-                    )
+                product = st.session_state.get(
+                    "quote_product"
                 )
 
-                quantity = (
-                    st.session_state.get(
-                        "quote_quantity"
-                    )
+                quantity = st.session_state.get(
+                    "quote_quantity"
                 )
 
-                total_amount = (
-                    st.session_state.get(
-                        "quote_total",
-                        0
-                    )
+                total_amount = st.session_state.get(
+                    "quote_total",
+                    0
                 )
 
-                unit = (
-                    st.session_state.get(
-                        "quote_unit",
-                        ""
-                    )
+                unit = st.session_state.get(
+                    "quote_unit",
+                    ""
                 )
 
                 if rfq_id is None:
 
                     st.error(
-                        " This RFQ has not been "
-                        "saved to CRM yet."
+                        "This RFQ has not been saved to CRM yet."
                     )
 
                     st.info(
                         "Go to Inbox / RFQ Detection, "
-                        "click ' Save RFQ to CRM', "
+                        "click 'Save RFQ to CRM', "
                         "then generate the draft again."
                     )
 
@@ -1050,22 +885,19 @@ elif section == "Quote Review":
                 ):
 
                     st.error(
-                        "Product or quantity "
-                        "information is missing."
+                        "Product or quantity information is missing."
                     )
 
                 elif current_status == "Approved":
 
                     st.warning(
-                        " This quote has already "
-                        "been approved."
+                        "This quote has already been approved."
                     )
 
                 elif current_status == "Rejected":
 
                     st.warning(
-                        "This quote has already "
-                        "been rejected."
+                        "This quote has already been rejected."
                     )
 
                 else:
@@ -1085,8 +917,7 @@ elif section == "Quote Review":
                     if database_status == "Approved":
 
                         st.warning(
-                            "This RFQ is already "
-                            "approved in CRM."
+                            "This RFQ is already approved in CRM."
                         )
 
                         st.session_state[
@@ -1096,8 +927,7 @@ elif section == "Quote Review":
                     elif database_status == "Rejected":
 
                         st.warning(
-                            " This RFQ is already "
-                            "rejected in CRM."
+                            "This RFQ is already rejected in CRM."
                         )
 
                         st.session_state[
@@ -1106,27 +936,20 @@ elif section == "Quote Review":
 
                     else:
 
-                        success, remaining = (
-                            reduce_inventory(
-                                product,
-                                quantity,
-                                customer,
-                                rfq_id
-                            )
+                        success, remaining = reduce_inventory(
+                            product,
+                            quantity,
+                            customer,
+                            rfq_id
                         )
 
                         if success:
-
-                            # ----------------------------------
-                            # UPDATE RFQ
-                            # ----------------------------------
 
                             update_rfq_status(
                                 rfq_id,
                                 "Approved",
                                 total_amount
                             )
-
 
                             save_sent_quote(
                                 customer,
@@ -1135,14 +958,12 @@ elif section == "Quote Review":
                                 total_amount
                             )
 
-
                             st.session_state[
                                 "quote_status"
                             ] = "Approved"
 
                             st.success(
-                                " Quote approved "
-                                "successfully!"
+                                "Quote approved successfully!"
                             )
 
                             st.success(
@@ -1151,35 +972,30 @@ elif section == "Quote Review":
                             )
 
                             st.info(
-                                "This RFQ will no longer "
-                                "appear in Inbox."
+                                "This RFQ will no longer appear in Inbox."
                             )
 
                         else:
 
                             st.error(
-                                " Quote cannot be "
-                                f"approved: {remaining}"
+                                f"Quote cannot be approved: {remaining}"
                             )
 
         with col2:
 
             if st.button(
-                " Reject Quote",
+                "Reject Quote",
                 key="reject_quote_button"
             ):
 
-                rfq_id = (
-                    st.session_state.get(
-                        "quote_rfq_id"
-                    )
+                rfq_id = st.session_state.get(
+                    "quote_rfq_id"
                 )
 
                 if rfq_id is None:
 
                     st.error(
-                        "Save the RFQ to CRM "
-                        "before rejecting it."
+                        "Save the RFQ to CRM before rejecting it."
                     )
 
                 else:
@@ -1195,10 +1011,9 @@ elif section == "Quote Review":
                     ] = "Rejected"
 
                     st.error(
-                        " Quote rejected by reviewer."
+                        "Quote rejected by reviewer."
                     )
 
                     st.info(
-                        "This RFQ will no longer "
-                        "appear in Inbox."
+                        "This RFQ will no longer appear in Inbox."
                     )
