@@ -20,6 +20,13 @@ from quote_generator import (
     create_client_quote
 )
 
+from gmail_reader import (
+    get_latest_emails,
+    detect_rfq as gmail_detect_rfq,
+    extract_rfq_information as gmail_extract_rfq_information,
+    extract_customer_name
+)
+
 
 create_database()
 
@@ -147,76 +154,31 @@ st.markdown(
 )
 
 
-emails = [
-    {
-        "id": 1,
-        "sender": "purchasing@abc-chemicals.com",
-        "customer": "mayur Chemicals",
-        "subject": "RFQ - Acetone - 500 KG",
-        "body": """Dear Sales Team,
 
-Please provide your best price for the following:
+if "gmail_emails" not in st.session_state:
+    st.session_state["gmail_emails"] = []
 
-Product: Acetone
-CAS Number: 67-64-1
-Quantity: 500 KG
-Required delivery: 15 September
 
-Regards,
-mayur Chemicals Purchasing Team"""
-    },
-    {
-        "id": 2,
-        "sender": "accounts@xyz-industries.com",
-        "customer": "Sejal Industries",
-        "subject": "Previous Invoice",
-        "body": """Dear Team,
+def load_gmail_emails(force=False):
+    if force or not st.session_state.get("gmail_emails"):
+        try:
+            fetched = get_latest_emails(max_results=20)
 
-Could you please send us a copy of our previous invoice?
+            for email in fetched:
+                email["customer"] = extract_customer_name(
+                    email.get("sender", "")
+                )
 
-Thank you."""
-    },
-    {
-        "id": 3,
-        "sender": "purchase@global-labs.com",
-        "customer": "GlobalEd Labs",
-        "subject": "Quotation Request - Methanol",
-        "body": """Hello,
+            st.session_state["gmail_emails"] = fetched
+            return fetched, None
 
-We would like a quotation for:
+        except Exception as exc:
+            return [], str(exc)
 
-Product: Methanol
-CAS Number: 67-56-1
-Quantity: 200 KG
-Required delivery: 20 September
+    return st.session_state["gmail_emails"], None
 
-Please include price and delivery time.
 
-Regards,
-GlobalEd Labs"""
-    },
-    {
-        "id": 4,
-        "sender": "procurement@mega-industries.com",
-        "customer": "Iron Industries",
-        "subject": "RFQ - Acetone and Specialty Chemical X",
-        "body": """Dear Sales Team,
-
-Please provide your best quotation for the following products:
-
-Product: Acetone
-CAS Number: 67-64-1
-Quantity: 500 KG
-
-Product: Specialty Chemical X
-Quantity: 100 KG
-
-Please include price and delivery time.
-
-Regards,
-Iron Industries"""
-    }
-]
+emails, gmail_error = load_gmail_emails()
 
 
 if "page" not in st.session_state:
@@ -270,57 +232,21 @@ def check_inventory(product, requested_quantity):
     }
 
 
+
 def detect_rfq(email):
-    text = (email["subject"] + " " + email["body"]).lower()
-    rfq_words = [
-        "rfq",
-        "quotation",
-        "quote",
-        "quotation request",
-        "price",
-        "best price",
-        "commercial offer",
-        "pricing",
-        "please quote"
-    ]
-    return any(word in text for word in rfq_words)
+    return gmail_detect_rfq(email)
 
 
 def extract_rfq_information(email):
-    line_items = []
-    current_item = None
+    items = gmail_extract_rfq_information(email)
 
-    for raw_line in email["body"].split("\n"):
-        line = raw_line.strip()
+    for item in items:
+        item["customer"] = email.get(
+            "customer",
+            item.get("customer", "Unknown Customer")
+        )
 
-        if line.lower().startswith("product:"):
-            if current_item is not None:
-                line_items.append(current_item)
-
-            current_item = {
-                "customer": email["customer"],
-                "product": line.split(":", 1)[1].strip(),
-                "cas_number": "Unknown",
-                "quantity": "Unknown",
-                "delivery_date": "Unknown"
-            }
-
-        elif line.lower().startswith("cas number:") and current_item:
-            current_item["cas_number"] = line.split(":", 1)[1].strip()
-
-        elif line.lower().startswith("cas:") and current_item:
-            current_item["cas_number"] = line.split(":", 1)[1].strip()
-
-        elif line.lower().startswith("quantity:") and current_item:
-            current_item["quantity"] = line.split(":", 1)[1].strip()
-
-        elif line.lower().startswith("required delivery:") and current_item:
-            current_item["delivery_date"] = line.split(":", 1)[1].strip()
-
-    if current_item is not None:
-        line_items.append(current_item)
-
-    return line_items
+    return items
 
 
 def find_saved_rfq(customer, product):
@@ -363,7 +289,8 @@ def get_dashboard_counts():
     )
 
     inbox = sum(
-        1 for email in emails
+        1
+        for email in emails
         if detect_rfq(email) and not is_email_processed(email)
     )
 
@@ -577,7 +504,7 @@ if st.session_state["page"] == "Dashboard":
         """
         <div class="app-header">
             <h1>Welcome to RFQ Control Center</h1>
-            <p>Monitor customer requests, manage chemical inventory and control quotation approvals.</p>
+            <p>Monitor live customer requests, manage chemical inventory and control quotation approvals.</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -674,11 +601,39 @@ elif st.session_state["page"] == "RFQ Inbox":
         """
         <div class="app-header">
             <h1>RFQ Inbox</h1>
-            <p>Incoming customer communication and automated RFQ detection.</p>
+            <p>Live Gmail mailbox connected to RFQ detection and processing.</p>
         </div>
         """,
         unsafe_allow_html=True
     )
+
+    refresh_col, info_col = st.columns([1, 3])
+
+    with refresh_col:
+        if st.button(
+            "Refresh Gmail Inbox",
+            use_container_width=True,
+            key="refresh_gmail"
+        ):
+            fresh_emails, refresh_error = load_gmail_emails(force=True)
+            emails = fresh_emails
+
+            if refresh_error:
+                st.error(f"Could not refresh Gmail: {refresh_error}")
+            else:
+                st.success(f"Loaded {len(emails)} recent emails.")
+                st.rerun()
+
+    with info_col:
+        st.caption(
+            f"Connected mailbox: Gmail | {len(emails)} recent emails loaded"
+        )
+
+    if gmail_error:
+        st.error(
+            "Gmail connection could not be loaded. "
+            f"Run the Gmail test first or check your OAuth files. Details: {gmail_error}"
+        )
 
     visible_emails = [
         email for email in emails
@@ -686,21 +641,25 @@ elif st.session_state["page"] == "RFQ Inbox":
     ]
 
     if not visible_emails:
-        st.success("No unprocessed RFQ emails are currently in the inbox.")
+        st.success("No unprocessed emails are currently available in the inbox.")
 
     for email in visible_emails:
 
+        email_is_rfq = detect_rfq(email)
+        email_status = "RFQ" if email_is_rfq else "Not RFQ"
+
         with st.expander(
-            f"{email['subject']}  |  {email['sender']}"
+            f"{email['subject']}  |  {email['sender']}  |  {email_status}"
         ):
 
             st.write("Customer:", email["customer"])
             st.write("Sender:", email["sender"])
             st.write("Subject:", email["subject"])
+            st.write("Received:", email.get("date", "Unknown"))
             st.write("Email Content")
             st.text(email["body"])
 
-            if not detect_rfq(email):
+            if not email_is_rfq:
                 st.warning("This message is not an RFQ.")
                 continue
 
