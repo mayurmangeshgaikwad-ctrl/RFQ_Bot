@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 import re
 
@@ -13,8 +14,16 @@ SCOPES = [
 ]
 
 
-def get_gmail_service():
+def _get_streamlit_secret(section, key):
+    try:
+        import streamlit as st
+        value = st.secrets[section][key]
+        return str(value)
+    except Exception:
+        return None
 
+
+def get_gmail_service():
     credentials = None
 
     if os.path.exists("token.json"):
@@ -27,18 +36,73 @@ def get_gmail_service():
         credentials.refresh(Request())
 
     if not credentials or not credentials.valid:
-
-        flow = InstalledAppFlow.from_client_secrets_file(
-            "credentials.json",
-            SCOPES
+        token_json = _get_streamlit_secret(
+            "gmail",
+            "token_json"
         )
 
-        credentials = flow.run_local_server(
-            port=0
+        if token_json:
+            try:
+                token_info = json.loads(token_json)
+                credentials = Credentials.from_authorized_user_info(
+                    token_info,
+                    SCOPES
+                )
+
+                if credentials.expired and credentials.refresh_token:
+                    credentials.refresh(Request())
+
+            except Exception as exc:
+                raise RuntimeError(
+                    "The Gmail token stored in Streamlit Secrets could not be read."
+                ) from exc
+
+    if not credentials or not credentials.valid:
+        credentials_json = _get_streamlit_secret(
+            "gmail",
+            "credentials_json"
         )
 
-        with open("token.json", "w") as token:
-            token.write(credentials.to_json())
+        if credentials_json:
+            try:
+                client_config = json.loads(credentials_json)
+            except Exception as exc:
+                raise RuntimeError(
+                    "The Gmail credentials stored in Streamlit Secrets are not valid JSON."
+                ) from exc
+
+            flow = InstalledAppFlow.from_client_config(
+                client_config,
+                SCOPES
+            )
+
+            credentials = flow.run_local_server(
+                port=0
+            )
+
+        elif os.path.exists("credentials.json"):
+            flow = InstalledAppFlow.from_client_secrets_file(
+                "credentials.json",
+                SCOPES
+            )
+
+            credentials = flow.run_local_server(
+                port=0
+            )
+
+        else:
+            raise RuntimeError(
+                "Gmail authentication is not configured. "
+                "Provide credentials.json/token.json locally or configure "
+                "[gmail] credentials_json and token_json in Streamlit Secrets."
+            )
+
+        if credentials:
+            try:
+                with open("token.json", "w") as token:
+                    token.write(credentials.to_json())
+            except OSError:
+                pass
 
     return build(
         "gmail",
@@ -48,38 +112,29 @@ def get_gmail_service():
 
 
 def get_header(headers, name):
-
     for header in headers:
-
         if header["name"].lower() == name.lower():
             return header["value"]
-
     return ""
 
 
 def decode_message_data(data):
-
     if not data:
         return ""
 
     try:
-
         decoded = base64.urlsafe_b64decode(
             data + "=" * (-len(data) % 4)
         )
-
         return decoded.decode(
             "utf-8",
             errors="ignore"
         )
-
     except Exception:
-
         return ""
 
 
 def get_email_body(payload):
-
     if not payload:
         return ""
 
@@ -96,10 +151,7 @@ def get_email_body(payload):
     )
 
     if body_data and mime_type == "text/plain":
-
-        return decode_message_data(
-            body_data
-        )
+        return decode_message_data(body_data)
 
     parts = payload.get(
         "parts",
@@ -110,73 +162,48 @@ def get_email_body(payload):
     html_text = ""
 
     for part in parts:
-
         part_mime = part.get(
             "mimeType",
             ""
         )
 
-        part_body = part.get(
+        part_data = part.get(
             "body",
             {}
-        )
-
-        part_data = part_body.get(
+        ).get(
             "data"
         )
 
         if part_mime == "text/plain" and part_data:
-
             plain_text += (
-                decode_message_data(
-                    part_data
-                )
+                decode_message_data(part_data)
                 + "\n"
             )
 
         elif part_mime == "text/html" and part_data:
-
             html_text += (
-                decode_message_data(
-                    part_data
-                )
+                decode_message_data(part_data)
                 + "\n"
             )
 
         elif part_mime.startswith("multipart/"):
-
-            nested_body = get_email_body(
-                part
-            )
-
+            nested_body = get_email_body(part)
             if nested_body:
-
-                plain_text += (
-                    nested_body
-                    + "\n"
-                )
+                plain_text += nested_body + "\n"
 
     if plain_text.strip():
-
         return plain_text.strip()
 
     if html_text.strip():
-
-        return clean_html(
-            html_text
-        )
+        return clean_html(html_text)
 
     if body_data:
-
-        return decode_message_data(
-            body_data
-        )
+        return decode_message_data(body_data)
 
     return ""
 
 
 def clean_html(html):
-
     html = re.sub(
         r"<style.*?>.*?</style>",
         " ",
@@ -218,43 +245,17 @@ def clean_html(html):
         html
     )
 
-    html = html.replace(
-        "&nbsp;",
-        " "
-    )
-
-    html = html.replace(
-        "&amp;",
-        "&"
-    )
-
-    html = html.replace(
-        "&lt;",
-        "<"
-    )
-
-    html = html.replace(
-        "&gt;",
-        ">"
-    )
-
-    html = re.sub(
-        r"[ \t]+",
-        " ",
-        html
-    )
-
-    html = re.sub(
-        r"\n\s*\n+",
-        "\n\n",
-        html
-    )
+    html = html.replace("&nbsp;", " ")
+    html = html.replace("&amp;", "&")
+    html = html.replace("&lt;", "<")
+    html = html.replace("&gt;", ">")
+    html = re.sub(r"[ \t]+", " ", html)
+    html = re.sub(r"\n\s*\n+", "\n\n", html)
 
     return html.strip()
 
 
 def get_latest_emails(max_results=10):
-
     service = get_gmail_service()
 
     results = service.users().messages().list(
@@ -270,7 +271,6 @@ def get_latest_emails(max_results=10):
     emails = []
 
     for message in messages:
-
         message_data = service.users().messages().get(
             userId="me",
             id=message["id"],
@@ -287,24 +287,10 @@ def get_latest_emails(max_results=10):
             []
         )
 
-        sender = get_header(
-            headers,
-            "From"
-        )
-
-        subject = get_header(
-            headers,
-            "Subject"
-        )
-
-        date = get_header(
-            headers,
-            "Date"
-        )
-
-        body = get_email_body(
-            payload
-        )
+        sender = get_header(headers, "From")
+        subject = get_header(headers, "Subject")
+        date = get_header(headers, "Date")
+        body = get_email_body(payload)
 
         emails.append(
             {
@@ -318,10 +304,17 @@ def get_latest_emails(max_results=10):
 
     return emails
 
-def detect_rfq(email):
 
-    subject = email.get("subject", "").lower().strip()
-    body = email.get("body", "").lower().strip()
+def detect_rfq(email):
+    subject = email.get(
+        "subject",
+        ""
+    ).lower().strip()
+
+    body = email.get(
+        "body",
+        ""
+    ).lower().strip()
 
     if re.search(r"\brfq\b", subject):
         return True
@@ -337,7 +330,6 @@ def detect_rfq(email):
     ]
 
     for phrase in strong_phrases:
-
         if phrase in subject or phrase in body:
             return True
 
@@ -380,8 +372,8 @@ def detect_rfq(email):
 
     return False
 
-def extract_rfq_information(email):
 
+def extract_rfq_information(email):
     body = email.get(
         "body",
         ""
@@ -400,13 +392,9 @@ def extract_rfq_information(email):
     )
 
     line_items = []
-
     current_item = None
 
-    lines = body.splitlines()
-
-    for line in lines:
-
+    for line in body.splitlines():
         line = line.strip()
 
         if not line:
@@ -419,12 +407,8 @@ def extract_rfq_information(email):
         )
 
         if product_match:
-
             if current_item is not None:
-
-                line_items.append(
-                    current_item
-                )
+                line_items.append(current_item)
 
             current_item = {
                 "customer": customer,
@@ -433,7 +417,6 @@ def extract_rfq_information(email):
                 "quantity": "Unknown",
                 "delivery_date": "Unknown"
             }
-
             continue
 
         if current_item is None:
@@ -446,11 +429,7 @@ def extract_rfq_information(email):
         )
 
         if cas_match:
-
-            current_item["cas_number"] = (
-                cas_match.group(1).strip()
-            )
-
+            current_item["cas_number"] = cas_match.group(1).strip()
             continue
 
         quantity_match = re.match(
@@ -460,11 +439,7 @@ def extract_rfq_information(email):
         )
 
         if quantity_match:
-
-            current_item["quantity"] = (
-                quantity_match.group(1).strip()
-            )
-
+            current_item["quantity"] = quantity_match.group(1).strip()
             continue
 
         delivery_match = re.match(
@@ -474,21 +449,13 @@ def extract_rfq_information(email):
         )
 
         if delivery_match:
-
-            current_item["delivery_date"] = (
-                delivery_match.group(1).strip()
-            )
-
+            current_item["delivery_date"] = delivery_match.group(1).strip()
             continue
 
     if current_item is not None:
-
-        line_items.append(
-            current_item
-        )
+        line_items.append(current_item)
 
     if not line_items:
-
         subject_match = re.search(
             r"rfq\s*[-:]\s*(.+?)\s*[-:]\s*(\d+(?:\.\d+)?)\s*(kg|kgs|g|litre|liter|litres|l)",
             subject,
@@ -496,7 +463,6 @@ def extract_rfq_information(email):
         )
 
         if subject_match:
-
             line_items.append(
                 {
                     "customer": customer,
@@ -515,9 +481,7 @@ def extract_rfq_information(email):
 
 
 def extract_customer_name(sender):
-
     if not sender:
-
         return "Unknown Customer"
 
     match = re.match(
@@ -526,11 +490,8 @@ def extract_customer_name(sender):
     )
 
     if match:
-
         name = match.group(1).strip()
-
         if name:
-
             return name
 
     email_match = re.search(
@@ -539,26 +500,15 @@ def extract_customer_name(sender):
     )
 
     if email_match:
-
         email_address = email_match.group(0)
+        username = email_address.split("@")[0]
 
-        username = email_address.split(
-            "@"
-        )[0]
-
-        return username.replace(
-            ".",
-            " "
-        ).replace(
-            "_",
-            " "
-        ).title()
+        return username.replace(".", " ").replace("_", " ").title()
 
     return sender
 
 
 def main():
-
     print()
     print("Gmail RFQ Reader")
     print("=" * 50)
@@ -579,13 +529,9 @@ def main():
         emails,
         start=1
     ):
-
-        is_rfq = detect_rfq(
-            email
-        )
+        is_rfq = detect_rfq(email)
 
         if is_rfq:
-
             rfq_count += 1
 
         print(
@@ -613,19 +559,13 @@ def main():
         )
 
         if is_rfq:
-
-            extracted_items = (
-                extract_rfq_information(
-                    email
-                )
-            )
+            extracted_items = extract_rfq_information(email)
 
             print(
                 "Extracted RFQ:"
             )
 
             for item in extracted_items:
-
                 print(
                     f"  Product: {item['product']}"
                 )
@@ -661,5 +601,4 @@ def main():
 
 
 if __name__ == "__main__":
-
     main()
